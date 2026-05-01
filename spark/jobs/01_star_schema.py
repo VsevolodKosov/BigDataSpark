@@ -5,6 +5,7 @@
   docker exec spark-master /opt/spark/bin/spark-submit \
     --master spark://spark-master:7077 \
     --jars /opt/spark/extra-jars/postgresql-42.7.3.jar \
+    --driver-class-path /opt/spark/extra-jars/postgresql-42.7.3.jar \
     /opt/spark/jobs/01_star_schema.py
 """
 
