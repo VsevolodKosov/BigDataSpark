@@ -1,0 +1,83 @@
+networks:
+  bigdata-net:
+    driver: bridge
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: postgres-bigdata
+    environment:
+      POSTGRES_DB: bigdata
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./sql/init_postgres.sql:/docker-entrypoint-initdb.d/init_postgres.sql
+    networks:
+      - bigdata-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d bigdata"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse-bigdata
+    environment:
+      CLICKHOUSE_DB: bigdata
+      CLICKHOUSE_USER: admin
+      CLICKHOUSE_PASSWORD: admin
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./sql/init_clickhouse.sql:/docker-entrypoint-initdb.d/init_clickhouse.sql
+    networks:
+      - bigdata-net
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user admin --password admin --query 'SELECT 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: spark-master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    environment:
+      SPARK_MASTER_HOST: spark-master
+    ports:
+      - "7077:7077"
+      - "8080:8080"
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+      - ./исходные данные:/opt/spark/data
+      - ./jars:/opt/spark/extra-jars
+    networks:
+      - bigdata-net
+    user: root
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    container_name: spark-worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      SPARK_WORKER_MEMORY: 2g
+      SPARK_WORKER_CORES: 2
+    volumes:
+      - ./spark/jobs:/opt/spark/jobs
+      - ./исходные данные:/opt/spark/data
+      - ./jars:/opt/spark/extra-jars
+    networks:
+      - bigdata-net
+    depends_on:
+      - spark-master
+    user: root
+
+volumes:
+  postgres_data:
+  clickhouse_data:
